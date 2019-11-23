@@ -1,0 +1,283 @@
+---
+title: "Customer Lifetime Value Analysis"
+author: "Kaustubh Gowardhan"
+date: "22/09/2019"
+output:
+  html_document: default
+---
+
+```{r Importing Data, echo=FALSE, warning=FALSE}
+library(stringr)
+library(forcats)
+library(caret)
+library(psych)
+library(ggplot2)
+library(gdata)
+library(grid)
+library(gridExtra)
+library(heplots)
+library(knitr)
+library(ggpubr)
+library(lmtest)
+
+dataset = read.csv("Customer Lifetime Value Analysis.csv")
+
+attach(dataset)
+
+#Remove unnecessary columns
+dataset$Customer = NULL
+
+#Set dependant variable as column 1
+dataset = dataset[c(2,1,3:22)]
+
+```
+
+```{r Customer Lifetime Value Analysis}
+summary(dataset)
+```
+
+```{r Missing Values}
+sapply(dataset, function(x) sum(is.na(x)))
+
+```
+```{r Check Outliers, echo=FALSE}
+boxplot(dataset$Customer.Lifetime.Value, xlab="Customer Lifetime Value")
+boxplot(dataset$Income, xlab="Income")
+boxplot(dataset$Monthly.Premium.Auto, xlab="Monthly Premium Auto")
+boxplot(dataset$Total.Claim.Amount, xlab="Total Claim Amount")
+```
+```{r Treat Outliers, echo=FALSE}
+summ = summary(dataset$Customer.Lifetime.Value)
+upper = summ["3rd Qu."] +1.5*IQR(dataset$Customer.Lifetime.Value)
+lower = summ["1st Qu."] -1.5*IQR(dataset$Customer.Lifetime.Value)
+qt = quantile(dataset$Customer.Lifetime.Value,c(0,0.05,0.1,0.25,0.5,0.75,0.90,0.95,0.99,0.995,1))
+
+if(summ["Max."]>upper){
+  dataset <- dataset[dataset$Customer.Lifetime.Value <qt["95%"], ]
+}else if(summ["Min."]<lower){
+    dataset <- dataset[dataset$Customer.Lifetime.Value >qt["5%"], ]
+}
+
+summ = summary(dataset$Customer.Lifetime.Value)
+upper = summ["3rd Qu."] +1.5*IQR(dataset$Customer.Lifetime.Value)
+lower = summ["1st Qu."] -1.5*IQR(dataset$Customer.Lifetime.Value)
+qt = quantile(dataset$Customer.Lifetime.Value,c(0,0.05,0.1,0.25,0.5,0.75,0.90,0.95,0.99,0.995,1))
+
+if(summ["Max."]>upper){
+  dataset <- dataset[dataset$Customer.Lifetime.Value <qt["95%"], ]
+}else if(summ["Min."]<lower){
+    dataset <- dataset[dataset$Customer.Lifetime.Value >qt["5%"], ]
+}
+
+summ = summary(dataset$Customer.Lifetime.Value)
+upper = summ["3rd Qu."] +1.5*IQR(dataset$Customer.Lifetime.Value)
+lower = summ["1st Qu."] -1.5*IQR(dataset$Customer.Lifetime.Value)
+qt = quantile(dataset$Customer.Lifetime.Value,c(0,0.05,0.1,0.25,0.5,0.75,0.90,0.95,0.99,0.995,1))
+
+if(summ["Max."]>upper){
+  dataset <- dataset[dataset$Customer.Lifetime.Value <qt["99%"], ]
+}else if(summ["Min."]<lower){
+    dataset <- dataset[dataset$Customer.Lifetime.Value >qt["1%"], ]
+}
+
+summ = summary(dataset$Customer.Lifetime.Value)
+upper = summ["3rd Qu."] +1.5*IQR(dataset$Customer.Lifetime.Value)
+lower = summ["1st Qu."] -1.5*IQR(dataset$Customer.Lifetime.Value)
+qt = quantile(dataset$Customer.Lifetime.Value,c(0,0.05,0.1,0.25,0.5,0.75,0.90,0.95,0.99,0.995,1))
+
+if(summ["Max."]>upper){
+  dataset <- dataset[dataset$Customer.Lifetime.Value <qt["99%"], ]
+}else if(summ["Min."]<lower){
+    dataset <- dataset[dataset$Customer.Lifetime.Value >qt["1%"], ]
+}
+
+
+summ = summary(dataset$Monthly.Premium.Auto)
+upper = summ["3rd Qu."] +1.5*IQR(dataset$Monthly.Premium.Auto)
+lower = summ["1st Qu."] -1.5*IQR(dataset$Monthly.Premium.Auto)
+qt = quantile(dataset$Monthly.Premium.Auto,c(0,0.05,0.1,0.25,0.5,0.75,0.90,0.95,0.99,0.995,1))
+
+if(summ["Max."]>upper){
+  dataset <- dataset[dataset$Monthly.Premium.Auto <qt["95%"], ]
+}else if(summ["Min."]<lower){
+    dataset <- dataset[dataset$Monthly.Premium.Auto >qt["5%"], ]
+}
+
+summ = summary(dataset$Total.Claim.Amount)
+upper = summ["3rd Qu."] +1.5*IQR(dataset$Total.Claim.Amount)
+lower = summ["1st Qu."] -1.5*IQR(dataset$Total.Claim.Amount)
+qt = quantile(dataset$Total.Claim.Amount,c(0,0.05,0.1,0.25,0.5,0.75,0.90,0.95,0.99,0.995,1))
+
+if(summ["Max."]>upper){
+  dataset <- dataset[dataset$Total.Claim.Amount <qt["95%"], ]
+}else if(summ["Min."]<lower){
+    dataset <- dataset[dataset$Total.Claim.Amount >qt["5%"], ]
+}
+
+```
+
+```{r After treatment}
+#Treated Outliers
+```
+
+```{r Confirm Outlier Treatment, echo=FALSE}
+boxplot(dataset$Customer.Lifetime.Value, xlab="Customer Lifetime Value")
+boxplot(dataset$Monthly.Premium.Auto, xlab="Monthly Premium Auto")
+boxplot(dataset$Total.Claim.Amount, xlab="Total Claim Amount")
+```
+```{r Exploration}
+## Data Exploration
+```
+
+```{r Numeric Values Relation, echo=FALSE}
+hist(dataset$Customer.Lifetime.Value, breaks = 30)
+hist(log10(dataset$Customer.Lifetime.Value), breaks = 30)
+
+
+pairs.panels(cbind(Customer.Lifetime.Value,
+                   Income,
+                   Months.Since.Last.Claim,
+                   Months.Since.Policy.Inception,
+                   Number.of.Policies,
+                   Number.of.Open.Complaints,
+                   Total.Claim.Amount))
+
+```
+```{r Fixing policy number}
+#Customer Lifetime Value is dispropotionately high for those with 
+#just one policy and similar in distribution for others
+
+dataset$Number.of.Policies <- as.factor(ifelse(dataset$Number.of.Policies>1, ifelse(dataset$Number.of.Policies>3, ">3", "2-3"), "<2"))
+
+
+
+```
+
+```{r Factor Relation}
+a = ggplot(dataset, aes(x = Customer.Lifetime.Value))
+
+a + geom_density(aes(y = ..count..,color = State))
+#California and Oregon have highest number of customer. Most relevant levels
+
+a + geom_density(aes(y = ..count..,color = Response))
+#Most customers respond "No"
+
+a + geom_density(aes(y = ..count..,color = Coverage))
+#Basic coverage most relevant, followed by extended, then Premium
+
+a + geom_density(aes(y = ..count..,color = Education))
+#Bachelors, College and HS educated customers most relevant. 
+#Masters and Doctors less so
+
+a + geom_density(aes(y = ..count..,color = EmploymentStatus))
+#Employed and Unemployed most relevant. Rest less so
+
+a + geom_density(aes(y = ..count..,color = Gender))
+#No significant variation with factors
+
+a + geom_density(aes(y = ..count..,color = Location.Code))
+#Suburban customers are most relevant.
+
+a + geom_density(aes(y = ..count..,color = Marital.Status))
+#Married customers are most relevat. Followed by Single and Divorced. 
+
+a + geom_density(aes(y = ..count..,color = Policy.Type))
+#Personal Auto is most relevant. Special Auto least
+
+a + geom_density(aes(y = ..count..,color = Policy))
+#Same as above. Personal L3 is most relevant
+
+a + geom_density(aes(y = ..count..,color = Renew.Offer.Type))
+#Offer 1 and 2 are most relevant. 
+
+a + geom_density(aes(y = ..count..,color = Sales.Channel))
+#Agent sales is most relevant. Followed by Branch, then CallCenter and Web
+
+a + geom_density(aes(y = ..count..,color = Vehicle.Class))
+#4-Door cars are most relevant
+
+a + geom_density(aes(y = ..count..,color = Vehicle.Size))
+#Medsize vehicles are most relevant
+
+a + geom_density(aes(y = ..count..,color = Number.of.Policies))
+#Low value customers have just 1 policy. High value have 2-3. Mid-Value Customers have >3
+
+```
+
+```{r Create Partition}
+#Create Test and Train data
+
+set.seed(100)
+Train1 = createDataPartition(dataset[,1], p=0.7, list = FALSE)
+
+trainData = dataset[Train1,]
+testData = dataset[-Train1,]
+
+```
+
+```{r Create Model}
+
+model = step(lm(Customer.Lifetime.Value~., data = trainData), direction = "both")
+
+summary(model)
+vif(model)
+
+```
+```{r Create Model with most relevant variables}
+
+model = step(lm(Customer.Lifetime.Value~I(Coverage=="Premium")+
+                  I(EmploymentStatus=="Employed")+
+                      Monthly.Premium.Auto +
+                      Months.Since.Policy.Inception+
+                      Number.of.Open.Complaints+
+                      I(Number.of.Policies == "<2")+
+                      I(Number.of.Policies == "2-3")+
+                      I(Number.of.Policies == ">3")
+                  , data = trainData), direction = "both")
+
+summary(model)
+vif(model)
+
+```
+```{r Check Assumptions}
+par(mfrow=c(2,2))
+plot(model)
+dwtest(model)
+
+```
+
+```{r Expected Error}
+RMSError = RMSE(model$fitted.values, trainData$Customer.Lifetime.Value, na.rm = TRUE)
+
+MAPE = 100*sum(abs(model$residuals/trainData$Customer.Lifetime.Value))/nrow(trainData)
+
+RMSError
+MAPE
+```
+
+
+```{r Testing, echo=FALSE}
+
+testData$Preds = predict(model, testData)
+
+plot(testData$Preds, testData$Customer.Lifetime.Value)
+
+#Correlation
+cor(testData$Preds, testData$Customer.Lifetime.Value)
+
+RMSEchk = RMSE(testData$Preds, testData$Customer.Lifetime.Value, na.rm = TRUE)
+MAPEchk = 100*sum(abs((testData$Preds-testData$Customer.Lifetime.Value)/testData$Customer.Lifetime.Value))/nrow(testData)
+RMSEchk
+MAPEchk
+
+```
+
+
+```{r Exporting Model}
+
+#Model is a good fit
+
+model
+
+```
+
